@@ -1,0 +1,113 @@
+version: '3.8'
+
+# Intended to be run from the podman directory
+
+networks:
+  sbomer:
+    driver: bridge
+
+services:
+  kafka:
+      image: quay.io/strimzi/kafka:latest-kafka-3.7.0
+      ports:
+        - "9092:9092"
+      volumes:
+        - ./kafka-config/server.properties:/opt/kafka/config/server.properties:z
+        - ./kafka-data:/var/lib/kafka:z
+      environment:
+        LOG_DIR: /var/lib/kafka
+      command: >
+        bash -c "
+          /opt/kafka/bin/kafka-storage.sh format \
+            --config /opt/kafka/config/server.properties \
+            --cluster-id 'ciVofVj9T9aU1a3S-n3CBA' \
+            --ignore-formatted ;
+          /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
+        " 
+      healthcheck:
+        test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+        interval: 15s
+        timeout: 10s
+        retries: 10
+      networks:
+        - sbomer
+
+  schema-registry:
+    image: quay.io/apicurio/apicurio-registry:latest
+    ports:
+      - "8081:8080"
+    environment:
+      # Use the 'kafkasql' storage to persist data in a Kafka topic
+      APICURIO_STORAGE_KIND: kafkasql
+      # Point to existing 'kafka' service
+      APICURIO_KAFKASQL_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      # Check if the registry's API is responding
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/apis/registry/v2 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sbomer
+
+  sbom-service:
+    image: "quay.io/sbomer/sbom-service:latest"
+    ports:
+      - "8083:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
+    networks:
+      - sbomer
+
+
+  manifest-storage-service:
+    build:
+      context: ../.
+      dockerfile: src/main/docker/Dockerfile.jvm
+    ports:
+      - "8085:8080"
+    networks:
+      - sbomer
+
+  errata-tool-handler:
+    image: "quay.io/sbomer/errata-tool-handler:latest"
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
+    networks:
+      - sbomer
+
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: sbomer-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # Pointing to Apicurio's Confluent compatibility API for better UI integration
+      # Creates tab for schemas in the UI
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8080/apis/ccompat/v7
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    networks:
+      - sbomer
