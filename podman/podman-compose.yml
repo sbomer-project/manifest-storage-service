@@ -9,6 +9,7 @@ networks:
 services:
   kafka:
       image: quay.io/strimzi/kafka:latest-kafka-3.7.0
+      restart: always
       ports:
         - "9092:9092"
       volumes:
@@ -75,6 +76,14 @@ services:
       dockerfile: src/main/docker/Dockerfile.jvm
     ports:
       - "8085:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
     networks:
       - sbomer
 
