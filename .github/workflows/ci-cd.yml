@@ -138,8 +138,22 @@ jobs:
 
       - name: Sign Helm Chart
         run: |
-          # Construct the full URI to the chart we just pushed
-          CHART_URI="${{ env.HELM_REPO }}/${{ env.HELM_CHART }}:0.1.${{ github.run_number }}"
+          # Define variables
+          CLEAN_REPO="${HELM_REPO#oci://}"
+          CHART_NAME="${{ env.HELM_CHART }}"
+          CHART_VERSION="0.1.${{ github.run_number }}"
+          FULL_IMAGE_REF="$CLEAN_REPO/$CHART_NAME:$CHART_VERSION"
           
-          echo "Signing $CHART_URI ..."
-          cosign sign -y -a "repo=${{ github.repository }}" -a "workflow=${{ github.workflow }}" -a "sha=${{ github.sha }}" "$CHART_URI"
+          DIGEST=$(skopeo inspect docker://$FULL_IMAGE_REF | jq -r '.Digest')
+          echo "Found Digest: $DIGEST"
+
+          # Construct the URI using the Digest (@sha256:...) instead of the Tag (0.1.x)
+          CHART_URI_DIGEST="$CLEAN_REPO/$CHART_NAME@$DIGEST"
+          
+          echo "Signing $CHART_URI_DIGEST ..."
+          
+          cosign sign -y \
+            -a "repo=${{ github.repository }}" \
+            -a "workflow=${{ github.workflow }}" \
+            -a "sha=${{ github.sha }}" \
+            "$CHART_URI_DIGEST"
