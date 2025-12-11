@@ -54,7 +54,7 @@ jobs:
           image: ${{ env.MANIFEST_STORAGE_SERVICE_IMAGE }}
           tags: latest ${{ steps.sha.outputs.sha }}
           containerfiles: |
-            ./manifest-storage-service/src/main/docker/Dockerfile.jvm
+            ./src/main/docker/Dockerfile.jvm
 
       - name: Push to Quay
         id: push
