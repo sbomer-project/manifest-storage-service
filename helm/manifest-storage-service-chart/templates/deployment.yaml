@@ -51,6 +51,9 @@ spec:
               value: {{ .Values.config.kafka.schemaRegistryUrl | quote }}
             - name: SBOMER_STORAGE_PUBLIC_API_URL
               value: {{ .Values.config.storagePublicApiUrl | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
