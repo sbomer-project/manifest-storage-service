@@ -46,7 +46,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 Selector labels
 */}}
 {{- define "manifest-storage-service-chart.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "manifest-storage-service-chart.name" . }}
+app.kubernetes.io/name: sbomer-manifest-storage-service
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
