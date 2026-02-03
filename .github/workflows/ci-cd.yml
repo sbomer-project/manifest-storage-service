@@ -14,7 +14,7 @@ jobs:
 
   build-manifest-storage-service:
     name: Build Manifest Storage Service
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -94,7 +94,7 @@ jobs:
 
   publish-chart:
     name: Publish Helm Chart
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [provenance]
 
     permissions:
