@@ -51,6 +51,18 @@ spec:
               value: {{ .Values.config.kafka.schemaRegistryUrl | quote }}
             - name: SBOMER_STORAGE_PUBLIC_API_URL
               value: {{ .Values.config.storagePublicApiUrl | quote }}
+            - name: S3_ENDPOINT
+              value: {{ .Values.config.s3.endpoint | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.config.s3.accessKeyId | quote }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.config.s3.secretAccessKey | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.config.s3.bucket | quote }}
+            - name: S3_PATH_STYLE_ACCESS
+              value: {{ .Values.config.s3.pathStyleAccess | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.config.s3.region | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

@@ -17,7 +17,7 @@ This service follows **Hexagonal Architecture (Ports and Adapters)**:
 * **Atomic Batch Uploads:** Supports uploading multiple files for a generation/enhancement (e.g., `bom.json`, `bom2.json`, ...) in a single HTTP request. If one upload fails, the operation returns an error to prevent partial state.
 * **Permanent URLs:** Generates stable, permanent URLs for accessing stored content via a proxy endpoint.
 * **Security (WIP):** Write operations are secured via an API Key (Configurable via `sbomer.api.secret`). (To be implemented)
-* **S3 Compatibility (WIP):** Seamless integration with S3 or local MinIO instances. (Currently has a mock in-memory implementation)
+* **S3 Compatibility:** Seamless integration with S3 compatible instances.
 
 ## API Documentation
 
