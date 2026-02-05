@@ -10,7 +10,7 @@ TAR_FILE="manifest-storage-service.tar"
 
 echo "--- Building and inserting manifest-storage-service image into Minikube registry ---"
 
-bash ./hack/build-with-schemas.sh
+bash ./hack/build-with-schemas.sh prod
 
 podman build --format docker -t "$SBOM_SERVICE_IMAGE" -f src/main/docker/Dockerfile.jvm .
 

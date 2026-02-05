@@ -21,6 +21,14 @@ config:
   kafka:
     bootstrapServers: "kafka:9092"
     schemaRegistryUrl: "http://schema-registry:8080/apis/registry/v2"
+  # S3 storage configuration
+  s3:
+    endpoint: "http://minio:9000"
+    accessKeyId: "minioadmin"
+    secretAccessKey: "minioadmin"
+    bucket: "sboms"
+    pathStyleAccess: "true"
+    region: "us-east-1"
 
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []

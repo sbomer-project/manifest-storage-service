@@ -15,6 +15,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.jboss.sbomer.manifest.storage.service.adapter.in.rest.dto.MultipartUploadDTO;
+import org.jboss.sbomer.manifest.storage.service.adapter.out.exception.StorageException;
 import org.jboss.sbomer.manifest.storage.service.core.domain.model.SbomFile;
 import org.jboss.sbomer.manifest.storage.service.core.port.api.StorageAdministration;
 
@@ -22,9 +23,11 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import lombok.extern.slf4j.Slf4j;
 
 @Path("/api/v1/storage")
 @Tag(name = "Storage", description = "Operations for uploading SBOMs and retrieving permanent download links.")
+@Slf4j
 public class StorageResource {
 
     @Inject
@@ -92,8 +95,9 @@ public class StorageResource {
             return Response.ok(stream)
                     .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                     .build();
-        } catch (Exception e) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+        } catch (StorageException e) {
+            log.error("Download failed for file {}", path, e);
+            return Response.status(e.getStatus()).build();
         }
     }
 
