@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -42,31 +41,27 @@ class S3StorageAdapterTest {
     @Mock
     S3Client client;
 
-    @InjectMocks
     S3StorageAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter.setBucketName(BUCKET_NAME);
+        adapter = new S3StorageAdapter(client, BUCKET_NAME);
     }
 
     @Test
     void testUploadSuccess() {
         String key = "foo/file.txt";
-        byte[] contentBytes = "123".getBytes();
-        InputStream content = new ByteArrayInputStream(contentBytes);
-        long contentLength = contentBytes.length;
-        String contentType = CONTENT_TYPE;
+        byte[] bytes = "123".getBytes();
         when(client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
             .thenReturn(PutObjectResponse.builder().build());
-        adapter.upload(key, content, contentLength, contentType);
+        adapter.upload(key, new ByteArrayInputStream(bytes), bytes.length, CONTENT_TYPE);
         ArgumentCaptor<PutObjectRequest> requestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(client).putObject(requestCaptor.capture(), any(RequestBody.class));
         PutObjectRequest capturedRequest = requestCaptor.getValue();
         assertEquals(BUCKET_NAME, capturedRequest.bucket());
         assertEquals(key, capturedRequest.key());
-        assertEquals(contentLength, capturedRequest.contentLength());
-        assertEquals(contentType, capturedRequest.contentType());
+        assertEquals(bytes.length, capturedRequest.contentLength());
+        assertEquals(CONTENT_TYPE, capturedRequest.contentType());
     }
 
     @Test
@@ -93,11 +88,11 @@ class S3StorageAdapterTest {
     @Test
     void testUploadNoSuchBucket() {
         String bucketName = "non-existent";
-        adapter.setBucketName(bucketName);
+        S3StorageAdapter noBucketAdapter = new S3StorageAdapter(client, bucketName);
         when(client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
             .thenThrow(NoSuchBucketException.builder().message("Bucket not found").build());
         StorageException ex = assertThrows(StorageException.class, () ->
-            adapter.upload("foo/non-existent.txt", new ByteArrayInputStream(new byte[0]), 0, CONTENT_TYPE)
+            noBucketAdapter.upload("foo/non-existent.txt", new ByteArrayInputStream(new byte[0]), 0, CONTENT_TYPE)
         );
         assertTrue(ex.getMessage().contains(bucketName));
     }
@@ -212,11 +207,11 @@ class S3StorageAdapterTest {
     void testDownloadNoSuchBucket() {
         String key = "bar/non-existent.txt";
         String bucketName = "non-existent";
-        adapter.setBucketName(bucketName);
+        S3StorageAdapter noBucketAdapter = new S3StorageAdapter(client, bucketName);
         when(client.getObject(any(GetObjectRequest.class)))
             .thenThrow(NoSuchBucketException.builder().message("Bucket not found").build());
         StorageException ex = assertThrows(StorageException.class, () ->
-            adapter.download(key)
+                noBucketAdapter.download(key)
         );
         assertTrue(ex.getMessage().contains(bucketName));
     }

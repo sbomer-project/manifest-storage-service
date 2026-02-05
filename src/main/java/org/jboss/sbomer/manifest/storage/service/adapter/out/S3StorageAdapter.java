@@ -37,12 +37,23 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 public class S3StorageAdapter implements ObjectStorage {
 
     @Inject
-    S3Client client;
+    protected S3Client client;
 
     @ConfigProperty(name = "sbomer.storage.s3.bucket")
     String bucketName;
 
-    void setBucketName(String bucketName) {
+    /**
+     * Default constructor for CDI.
+     */
+    public S3StorageAdapter() {}
+
+    /**
+     * Package-private constructor for testing.
+     * @param client S3Client instance to use
+     * @param bucketName bucket name to use for storage operations
+     */
+    S3StorageAdapter(S3Client client, String bucketName) {
+        this.client = client;
         this.bucketName = bucketName;
     }
 
@@ -68,7 +79,11 @@ public class S3StorageAdapter implements ObjectStorage {
                     .contentLength(contentLength)
                     .contentType(contentType)
                     .build();
-            client.putObject(request, RequestBody.fromInputStream(content, contentLength));
+            // Enables AWS SDK's built-in retry mechanism to work with non-markable streams
+            // RequestBody.fromInputStream() fails on retry
+            // RequestBody.fromBytes() allows unlimited retries
+            byte[] bytes = content.readAllBytes();
+            client.putObject(request, RequestBody.fromBytes(bytes));
             log.info("Uploaded to S3 bucket '{}': {} ({} bytes)", bucketName, key, contentLength);
         } catch (Exception e) {
             throw handleException(e, key);
