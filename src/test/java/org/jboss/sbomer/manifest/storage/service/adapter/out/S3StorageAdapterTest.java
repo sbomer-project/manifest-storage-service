@@ -35,9 +35,9 @@ import software.amazon.awssdk.services.s3.model.*;
 @ExtendWith(MockitoExtension.class)
 class S3StorageAdapterTest {
 
-    private static final String BUCKET_NAME = "test";
+    private static final String BUCKET_NAME = "test-storage";
     private static final String CONTENT_TYPE = "text/plain";
-    
+
     @Mock
     S3Client client;
 
@@ -159,6 +159,10 @@ class S3StorageAdapterTest {
     void testDownloadSuccess() {
         String key = "bar/file.txt";
         ResponseInputStream<GetObjectResponse> mockResponse = mock(ResponseInputStream.class);
+        GetObjectResponse getObjectResponse = GetObjectResponse.builder()
+            .contentLength(3L)
+            .build();
+        when(mockResponse.response()).thenReturn(getObjectResponse);
         when(client.getObject(any(GetObjectRequest.class)))
             .thenReturn(mockResponse);
         InputStream result = adapter.download(key);

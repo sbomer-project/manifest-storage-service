@@ -54,11 +54,20 @@ spec:
             - name: S3_ENDPOINT
               value: {{ .Values.config.s3.endpoint | quote }}
             - name: AWS_ACCESS_KEY_ID
-              value: {{ .Values.config.s3.accessKeyId | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.s3.existingSecret }}
+                  key: access-key-id
             - name: AWS_SECRET_ACCESS_KEY
-              value: {{ .Values.config.s3.secretAccessKey | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.s3.existingSecret }}
+                  key: secret-access-key
             - name: S3_BUCKET
-              value: {{ .Values.config.s3.bucket | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.s3.existingSecret }}
+                  key: bucket
             - name: S3_PATH_STYLE_ACCESS
               value: {{ .Values.config.s3.pathStyleAccess | quote }}
             - name: AWS_REGION

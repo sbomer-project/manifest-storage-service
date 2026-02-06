@@ -110,7 +110,8 @@ public class S3StorageAdapter implements ObjectStorage {
                     .key(key)
                     .build();
             ResponseInputStream<GetObjectResponse> responseInputStream = client.getObject(request);
-            log.info("Downloaded from S3 bucket '{}': {}", bucketName, key);
+            long contentLength = responseInputStream.response().contentLength();
+            log.info("Downloaded from S3 bucket '{}': {} ({} bytes)", bucketName, key, contentLength);
             return responseInputStream;
         } catch (NoSuchKeyException e) {
             throw new StorageFileNotFoundException("File not found: " + key, e);

@@ -14,7 +14,7 @@ import software.amazon.awssdk.regions.Region;
  */
 public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
 
-    public static final String BUCKET_NAME = "test";
+    public static final String BUCKET_NAME = "test-storage";
     public static final String ACCESS_KEY_ID = "minioadmin";
     public static final String SECRET_ACCESS_KEY = "minioadmin";
     public static final Region REGION = US_EAST_1;

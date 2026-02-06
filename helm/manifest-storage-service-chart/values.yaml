@@ -23,10 +23,9 @@ config:
     schemaRegistryUrl: "http://schema-registry:8080/apis/registry/v2"
   # S3 storage configuration
   s3:
+    # Name of existing secret containing S3 credentials and bucket name
+    existingSecret: ""
     endpoint: "http://minio:9000"
-    accessKeyId: "minioadmin"
-    secretAccessKey: "minioadmin"
-    bucket: "sboms"
     pathStyleAccess: "true"
     region: "us-east-1"
 
