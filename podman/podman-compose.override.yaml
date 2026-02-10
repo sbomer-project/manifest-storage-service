@@ -1,7 +1,0 @@
-version: '3.8'
-services:
-  manifest-storage-service:
-    build:
-      # Context is one level up (the project root where this script started)
-      context: ../../
-      dockerfile: src/main/docker/Dockerfile.jvm

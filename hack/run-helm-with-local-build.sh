@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script builds the schema, then tears down and rebuilds
-# the local podman-compose development environment.
+# the local helm development environment.
 #
 # It is intended to be run from the root of the project.
 
@@ -18,10 +18,12 @@ LOCAL_CHART_PATH="helm/manifest-storage-service-chart"
 echo "--- Checking Minikube status (Profile: $PROFILE) ---"
 
 if ! minikube -p "$PROFILE" status > /dev/null 2>&1; then
-    echo "Error: Minikube cluster '$PROFILE' is NOT running."
+    error "Minikube cluster '$PROFILE' is NOT running."
     echo ""
     echo "Please run the setup script first to start the cluster and install dependencies:"
-    echo "./hack/setup-minikube.sh"
+    echo "./hack/setup-minikube.sh (and please leave it running so that the cluster can be exposed to the host at port 8001)"
+    echo "If window was already closed, please run: kubectl proxy --port=8001 --address='0.0.0.0' --accept-hosts='^.*$'"
+    echo "This enables the system to connect to the minikube cluster"
     echo ""
     exit 1
 fi

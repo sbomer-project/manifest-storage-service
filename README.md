@@ -45,7 +45,7 @@ The application is configured via `application.properties` or environment variab
 
 ## Getting Started (Local Development)
 
-This component is designed to run alongside the wider SBOMer system using Podman Compose.
+This component is designed to run alongside the wider SBOMer system using Helm.
 
 ### 1. Start the Infrastructure
 
@@ -55,13 +55,20 @@ Run the local dev from the root of the project repository to set up the minikube
 bash ./hack/setup-local-dev.sh
 ```
 
-Then run the command below to start the podman-compose with the component build:
+Then run the command below to start the Helm chart with the component build:
 
 ```bash
-bash ./hack/run-compose-with-local-build.sh
+bash ./hack/run-helm-with-local-build.sh
 ```
 
 This will spin up the manifest-storage-service on port 8085 along with the latest Quay images of the other components of the system.
+
+
+
+Run the following to expose the service port to your local machine:
+```bash
+k port-forward svc/sbomer-release-manifest-storage-service-chart 8085:8080 -n sbomer-test
+```
 
 ### 2. Manual Testing (Curl)
 
