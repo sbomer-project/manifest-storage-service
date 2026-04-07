@@ -36,14 +36,19 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class StorageResource {
 
+    private final StorageAdministration storageService;
+    private final int maxFileSizeMb;
+    private final int maxFilesPerBatch;
+
     @Inject
-    StorageAdministration storageService;
-
-    @ConfigProperty(name = "sbomer.storage.max-file-size-mb", defaultValue = "100")
-    int maxFileSizeMb;
-
-    @ConfigProperty(name = "sbomer.storage.max-files-per-batch", defaultValue = "10")
-    int maxFilesPerBatch;
+    public StorageResource(
+            StorageAdministration storageService,
+            @ConfigProperty(name = "sbomer.storage.max-file-size-mb", defaultValue = "100") int maxFileSizeMb,
+            @ConfigProperty(name = "sbomer.storage.max-files-per-batch", defaultValue = "10") int maxFilesPerBatch) {
+        this.storageService = storageService;
+        this.maxFileSizeMb = maxFileSizeMb;
+        this.maxFilesPerBatch = maxFilesPerBatch;
+    }
 
     @POST
     @Path("/generations/{generationId}")

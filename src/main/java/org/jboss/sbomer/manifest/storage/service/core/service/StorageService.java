@@ -2,6 +2,7 @@ package org.jboss.sbomer.manifest.storage.service.core.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,11 +26,16 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class StorageService implements StorageAdministration {
 
-    @Inject
-    ObjectStorage objectStorage;
+    private final ObjectStorage objectStorage;
+    private final String publicApiUrl;
 
-    @ConfigProperty(name = "sbomer.storage.public-api-url")
-    String publicApiUrl;
+    @Inject
+    public StorageService(
+            ObjectStorage objectStorage,
+            @ConfigProperty(name = "sbomer.storage.public-api-url") String publicApiUrl) {
+        this.objectStorage = objectStorage;
+        this.publicApiUrl = publicApiUrl;
+    }
 
     @WithSpan
     @Override
@@ -83,7 +89,7 @@ public class StorageService implements StorageAdministration {
             
             // Use try-with-resources to ensure InputStream is always closed
             // The stream is opened, used, and closed within this block
-            try (InputStream content = file.openStream()) {
+            try (InputStream content = Files.newInputStream(file.getFilePath())) {
                 log.debug("Uploading file: {} to key: {}", file.getFilename(), storageKey);
                 objectStorage.upload(storageKey, content, file.getSize(), file.getContentType());
                 
