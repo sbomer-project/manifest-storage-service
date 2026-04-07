@@ -4,9 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,12 +21,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.StreamingOutput;
 
 @ExtendWith(MockitoExtension.class)
 class StorageResourceTest {
@@ -36,7 +34,6 @@ class StorageResourceTest {
     @Mock
     StorageAdministration storageService;
 
-    @InjectMocks
     StorageResource storageResource;
 
     @TempDir
@@ -46,16 +43,8 @@ class StorageResourceTest {
     private static final String ENHANCEMENT_ID = "enh-456";
 
     @BeforeEach
-    void setUp() throws Exception {
-        // Set configuration properties using reflection
-        setField("maxFileSizeMb", 100);
-        setField("maxFilesPerBatch", 10);
-    }
-
-    private void setField(String fieldName, Object value) throws Exception {
-        var field = StorageResource.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(storageResource, value);
+    void setUp() {
+        storageResource = new StorageResource(storageService, 100, 10);
     }
 
     @Test
@@ -242,18 +231,15 @@ class StorageResourceTest {
     void testDownload_Success() {
         // Given
         String path = "gen-123/bom.json";
-        InputStream expectedStream = new ByteArrayInputStream("file content".getBytes());
-        when(storageService.getFileContent(path)).thenReturn(expectedStream);
 
         // When
         Response response = storageResource.download(path);
 
         // Then
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        assertEquals(expectedStream, response.getEntity());
+        assertTrue(response.getEntity() instanceof StreamingOutput);
         assertTrue(response.getHeaderString("Content-Disposition").contains("attachment"));
         assertTrue(response.getHeaderString("Content-Disposition").contains("bom.json"));
-        verify(storageService).getFileContent(path);
     }
 
 
@@ -288,5 +274,3 @@ class StorageResourceTest {
         return upload;
     }
 }
-
-// Made with Bob
