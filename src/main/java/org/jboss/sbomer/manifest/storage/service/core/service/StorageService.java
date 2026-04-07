@@ -1,5 +1,6 @@
 package org.jboss.sbomer.manifest.storage.service.core.service;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -61,11 +62,18 @@ public class StorageService implements StorageAdministration {
     public InputStream getFileContent(String storageKey) {
         validateInput(storageKey, "storageKey");
         log.debug("Retrieving file content for key: {}", storageKey);
+        
+        // Return the stream directly - caller is responsible for closing it
+        // In this case, JAX-RS will handle closing the stream after response is sent
         return objectStorage.download(storageKey);
     }
 
     /**
      * Uploads a batch of files atomically. If any file fails, the entire batch fails.
+     * Properly manages InputStream resources using try-with-resources pattern.
+     * 
+     * Each file's InputStream is opened, used, and closed within the same iteration
+     * to ensure proper resource management.
      */
     private Map<String, String> uploadBatch(String folderPrefix, List<SbomFile> files) {
         Map<String, String> resultUrls = new HashMap<>();
@@ -73,13 +81,20 @@ public class StorageService implements StorageAdministration {
         for (SbomFile file : files) {
             String storageKey = String.format("%s/%s", folderPrefix, file.getFilename());
             
-            try {
+            // Use try-with-resources to ensure InputStream is always closed
+            // The stream is opened, used, and closed within this block
+            try (InputStream content = file.openStream()) {
                 log.debug("Uploading file: {} to key: {}", file.getFilename(), storageKey);
-                objectStorage.upload(storageKey, file.getContent(), file.getSize(), file.getContentType());
+                objectStorage.upload(storageKey, content, file.getSize(), file.getContentType());
                 
                 String permanentUrl = String.format("%s/api/v1/storage/content/%s", publicApiUrl, storageKey);
                 resultUrls.put(file.getFilename(), permanentUrl);
                 
+            } catch (IOException e) {
+                log.error("Failed to open file: {} for upload", file.getFilename(), e);
+                throw new RuntimeException(
+                        String.format("Failed to open file '%s': %s", file.getFilename(), e.getMessage()),
+                        e);
             } catch (Exception e) {
                 log.error("Upload failed for file: {} at key: {}. Aborting batch.",
                         file.getFilename(), storageKey, e);
@@ -105,3 +120,4 @@ public class StorageService implements StorageAdministration {
         }
     }
 }
+

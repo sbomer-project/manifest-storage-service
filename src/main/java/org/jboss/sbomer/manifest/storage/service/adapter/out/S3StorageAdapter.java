@@ -4,6 +4,7 @@ import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
 import static jakarta.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static jakarta.ws.rs.core.Response.Status.TOO_MANY_REQUESTS;
 
+import java.io.IOException;
 import java.io.InputStream;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -64,7 +65,7 @@ public class S3StorageAdapter implements ObjectStorage {
      * @param contentLength size of content in bytes
      * @param contentType MIME type of content (e.g., 'application/json')
      * @throws StorageKeyInvalidException if key is null, empty, or contains path traversal patterns
-     * @throws StorageException if bucket doesn't exist or unexpected error occurs
+     * @throws StorageException if bucket doesn't exist, I/O error occurs, or unexpected error occurs
      * @throws StorageAccessException if access is denied (HTTP 403)
      * @throws StorageUnavailableException if storage is unavailable or rate limited
      */
@@ -73,18 +74,32 @@ public class S3StorageAdapter implements ObjectStorage {
         validateKey(key);
         try {
             log.info("Uploading to S3 bucket '{}': {}", bucketName, key);
+            
+            // Read content into memory for retry support
+            // Separate I/O errors from S3 errors for better diagnostics
+            byte[] bytes;
+            try {
+                bytes = content.readAllBytes();
+            } catch (IOException e) {
+                log.error("Failed to read input stream for key: {}", key, e);
+                throw new StorageException("Failed to read input stream for key: " + key, e);
+            }
+            
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucketName)
                     .key(key)
                     .contentLength(contentLength)
                     .contentType(contentType)
                     .build();
+            
             // Enables AWS SDK's built-in retry mechanism to work with non-markable streams
             // RequestBody.fromInputStream() fails on retry
             // RequestBody.fromBytes() allows unlimited retries
-            byte[] bytes = content.readAllBytes();
             client.putObject(request, RequestBody.fromBytes(bytes));
             log.info("Uploaded to S3 bucket '{}': {} ({} bytes)", bucketName, key, contentLength);
+        } catch (StorageException e) {
+            // Re-throw our domain exceptions as-is
+            throw e;
         } catch (Exception e) {
             throw handleException(e, key);
         }

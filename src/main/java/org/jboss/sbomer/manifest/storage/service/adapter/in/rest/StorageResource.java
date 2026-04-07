@@ -1,10 +1,9 @@
 package org.jboss.sbomer.manifest.storage.service.adapter.in.rest;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -25,6 +24,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.StreamingOutput;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -104,6 +104,13 @@ public class StorageResource {
         return handleUpload(uploads, files -> storageService.storeEnhancementSboms(genId, enhId, files));
     }
 
+    /**
+     * Downloads a file from storage.
+     * 
+     * Uses StreamingOutput to ensure proper InputStream lifecycle management.
+     * The InputStream is opened when streaming starts and automatically closed
+     * when streaming completes or fails.
+     */
     @GET
     @Path("/content/{path: .*}")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
@@ -113,9 +120,19 @@ public class StorageResource {
             @PathParam("path")
             @NotBlank
             String path) {
-        InputStream stream = storageService.getFileContent(path);
+        
         String filename = path.substring(path.lastIndexOf('/') + 1);
-        return Response.ok(stream)
+        
+        // Use StreamingOutput to properly manage InputStream lifecycle
+        // The stream is opened lazily when JAX-RS starts writing the response
+        // and automatically closed when done
+        StreamingOutput streamingOutput = output -> {
+            try (InputStream stream = storageService.getFileContent(path)) {
+                stream.transferTo(output);
+            }
+        };
+        
+        return Response.ok(streamingOutput)
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .build();
     }
@@ -128,27 +145,18 @@ public class StorageResource {
     private Response handleUpload(List<FileUpload> uploads, UploadAction action) {
         validateUploads(uploads);
         
-        List<SbomFile> domainFiles = new ArrayList<>();
-        try {
-            for (FileUpload upload : uploads) {
-                validateFileUpload(upload);
-                
-                domainFiles.add(SbomFile.builder()
+        List<SbomFile> domainFiles = uploads.stream()
+                .peek(this::validateFileUpload)
+                .map(upload -> SbomFile.builder()
                         .filename(upload.fileName())
                         .contentType(upload.contentType())
                         .size(upload.size())
-                        .content(java.nio.file.Files.newInputStream(upload.uploadedFile()))
-                        .build());
-            }
-            
-            Map<String, String> result = action.execute(domainFiles);
-            return Response.ok(result).build();
-            
-        } catch (IOException e) {
-            log.error("File processing error", e);
-            throw new WebApplicationException("Failed to process uploaded files: " + e.getMessage(),
-                    Response.Status.INTERNAL_SERVER_ERROR);
-        }
+                        .filePath(upload.uploadedFile())
+                        .build())
+                .collect(Collectors.toList());
+        
+        Map<String, String> result = action.execute(domainFiles);
+        return Response.ok(result).build();
     }
 
     private void validateUploads(List<FileUpload> uploads) {
@@ -175,6 +183,5 @@ public class StorageResource {
         }
     }
 }
-
 
 
