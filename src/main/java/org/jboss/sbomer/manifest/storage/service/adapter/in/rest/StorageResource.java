@@ -106,7 +106,7 @@ public class StorageResource {
 
     /**
      * Downloads a file from storage.
-     * 
+     *
      * Uses StreamingOutput to ensure proper InputStream lifecycle management.
      * The InputStream is opened when streaming starts and automatically closed
      * when streaming completes or fails.
@@ -121,7 +121,10 @@ public class StorageResource {
             @NotBlank
             String path) {
         
-        String filename = path.substring(path.lastIndexOf('/') + 1);
+        // Defense-in-depth: validate at API boundary
+        validateStoragePath(path);
+        
+        String filename = extractSafeFilename(path);
         
         // Use StreamingOutput to properly manage InputStream lifecycle
         // The stream is opened lazily when JAX-RS starts writing the response
@@ -133,7 +136,8 @@ public class StorageResource {
         };
         
         return Response.ok(streamingOutput)
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition",
+                        String.format("attachment; filename=\"%s\"", sanitizeFilename(filename)))
                 .build();
     }
 
@@ -181,6 +185,62 @@ public class StorageResource {
         if (upload.fileName() == null || upload.fileName().trim().isEmpty()) {
             throw new WebApplicationException("Filename cannot be empty", Response.Status.BAD_REQUEST);
         }
+    }
+
+    /**
+     * Validates storage path to prevent path traversal attacks.
+     *
+     * @param path the storage path to validate
+     * @throws WebApplicationException if path is invalid or contains malicious patterns
+     */
+    private void validateStoragePath(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            throw new WebApplicationException("Path cannot be empty", Response.Status.BAD_REQUEST);
+        }
+        
+        // Prevent path traversal attacks
+        if (path.contains("..") || path.startsWith("/") || path.contains("\\")) {
+            log.warn("Path traversal attempt detected: {}", path);
+            throw new WebApplicationException(
+                    "Invalid path: path traversal not allowed",
+                    Response.Status.BAD_REQUEST);
+        }
+        
+        // Validate expected pattern: gen-xxx/file.json or gen-xxx/enh-yyy/file.json
+        // Allows alphanumeric, hyphens, underscores in directory names
+        // Allows alphanumeric, dots, hyphens, underscores in filenames
+        if (!path.matches("^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)?/[a-zA-Z0-9_.-]+$")) {
+            log.warn("Invalid path format: {}", path);
+            throw new WebApplicationException(
+                    "Invalid path format",
+                    Response.Status.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Extracts filename from path and removes any path separators.
+     *
+     * @param path the storage path
+     * @return safe filename without path separators
+     */
+    private String extractSafeFilename(String path) {
+        String filename = path.substring(path.lastIndexOf('/') + 1);
+        // Remove any remaining path separators
+        return filename.replaceAll("[/\\\\]", "");
+    }
+
+    /**
+     * Sanitizes filename to prevent HTTP header injection attacks.
+     * Removes characters that could break header format or inject malicious content.
+     *
+     * @param filename the filename to sanitize
+     * @return sanitized filename safe for use in HTTP headers
+     */
+    private String sanitizeFilename(String filename) {
+        // Prevent header injection and ensure safe filename
+        // Allow only alphanumeric characters, dots, hyphens, and underscores
+        // Replace any other characters with underscore
+        return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 }
 
