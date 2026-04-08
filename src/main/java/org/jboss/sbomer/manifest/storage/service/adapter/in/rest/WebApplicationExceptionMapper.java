@@ -3,10 +3,9 @@ package org.jboss.sbomer.manifest.storage.service.adapter.in.rest;
 import java.time.Instant;
 
 import org.jboss.sbomer.manifest.storage.service.adapter.in.rest.dto.ErrorResponse;
-import org.jboss.sbomer.manifest.storage.service.adapter.out.exception.StorageException;
 
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
@@ -14,34 +13,35 @@ import jakarta.ws.rs.ext.Provider;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Exception mapper for StorageException and its subtypes.
- * Maps storage-related errors to appropriate HTTP status codes with structured responses.
+ * Exception mapper for WebApplicationException.
+ * Handles validation errors and other JAX-RS exceptions with proper status codes.
  */
 @Provider
 @Slf4j
-public class StorageExceptionMapper implements ExceptionMapper<StorageException> {
+public class WebApplicationExceptionMapper implements ExceptionMapper<WebApplicationException> {
     
     @Context
     UriInfo uriInfo;
 
     @Override
-    public Response toResponse(StorageException e) {
+    public Response toResponse(WebApplicationException e) {
+        int status = e.getResponse().getStatus();
         String path = uriInfo != null ? uriInfo.getPath() : "unknown";
-        int status = e.getStatus().getStatusCode();
         
-        log.error("Storage operation failed at {}: {}", path, e.getMessage(), e);
+        log.warn("WebApplicationException: {} - {} at {}", status, e.getMessage(), path);
         
         ErrorResponse error = ErrorResponse.builder()
                 .status(status)
-                .error(e.getStatus().getReasonPhrase())
+                .error(Response.Status.fromStatusCode(status).getReasonPhrase())
                 .message(e.getMessage())
                 .timestamp(Instant.now())
                 .path(path)
                 .build();
         
-        return Response.status(e.getStatus())
-                .type(MediaType.APPLICATION_JSON)
+        return Response.status(status)
+                .type(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
                 .entity(error)
                 .build();
     }
 }
+

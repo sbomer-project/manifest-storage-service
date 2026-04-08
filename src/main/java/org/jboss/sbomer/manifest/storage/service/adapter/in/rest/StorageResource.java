@@ -15,6 +15,7 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
+import org.jboss.sbomer.manifest.storage.service.adapter.in.rest.dto.ErrorResponse;
 import org.jboss.sbomer.manifest.storage.service.adapter.in.rest.dto.MultipartUploadDTO;
 import org.jboss.sbomer.manifest.storage.service.core.domain.model.SbomFile;
 import org.jboss.sbomer.manifest.storage.service.core.port.api.StorageAdministration;
@@ -57,6 +58,10 @@ public class StorageResource {
     @Operation(summary = "Upload Generation SBOMs", description = "Uploads one or more files associated with a specific Generation ID.")
     @RequestBody(description = "The files to upload", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA, schema = @Schema(implementation = MultipartUploadDTO.class)))
     @APIResponse(responseCode = "200", description = "Files uploaded successfully. Returns a map of Filename -> Permanent URL.", content = @Content(mediaType = MediaType.APPLICATION_JSON, example = "{\"bom.json\": \"https://host/api/v1/storage/content/gen-123/bom.json\"}"))
+    @APIResponse(responseCode = "400", description = "Bad Request - Invalid input (empty files, file too large, too many files, invalid generation ID)", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "403", description = "Forbidden - Access denied to storage", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "500", description = "Internal Server Error - Unexpected error occurred", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "503", description = "Service Unavailable - Storage service temporarily unavailable", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
     public Response uploadGeneration(
             @Parameter(description = "The Generation ID", required = true) @PathParam("generationId") @NotBlank String genId,
             @RestForm("files") List<FileUpload> uploads) {
@@ -70,6 +75,10 @@ public class StorageResource {
     @Operation(summary = "Upload Enhancement SBOMs", description = "Uploads one or more files associated with a specific Enhancement step.")
     @RequestBody(description = "The files to upload", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA, schema = @Schema(implementation = MultipartUploadDTO.class)))
     @APIResponse(responseCode = "200", description = "Files uploaded successfully. Returns a map of Filename -> Permanent URL.", content = @Content(mediaType = MediaType.APPLICATION_JSON))
+    @APIResponse(responseCode = "400", description = "Bad Request - Invalid input (empty files, file too large, too many files, invalid IDs)", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "403", description = "Forbidden - Access denied to storage", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "500", description = "Internal Server Error - Unexpected error occurred", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "503", description = "Service Unavailable - Storage service temporarily unavailable", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
     public Response uploadEnhancement(
             @Parameter(description = "The Generation ID", required = true) @PathParam("generationId") @NotBlank String genId,
             @Parameter(description = "The Enhancement ID", required = true) @PathParam("enhancementId") @NotBlank String enhId,
@@ -86,8 +95,13 @@ public class StorageResource {
      */
     @GET
     @Path("/content/{path: .*}")
-    @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Operation(summary = "Download File", description = "Streams the content of a stored file based on its storage key path.")
+    @APIResponse(responseCode = "200", description = "File downloaded successfully", content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM))
+    @APIResponse(responseCode = "400", description = "Bad Request - Invalid path format or path traversal attempt", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "403", description = "Forbidden - Access denied to storage", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "404", description = "Not Found - File does not exist", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "500", description = "Internal Server Error - Unexpected error occurred", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
+    @APIResponse(responseCode = "503", description = "Service Unavailable - Storage service temporarily unavailable", content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class)))
     public Response download(
             @Parameter(description = "The storage path", required = true) @PathParam("path") @NotBlank String path) {
 
@@ -102,6 +116,7 @@ public class StorageResource {
         };
 
         return Response.ok(streamingOutput)
+                .type(MediaType.APPLICATION_OCTET_STREAM)
                 .header("Content-Disposition",
                         String.format("attachment; filename=\"%s\"", sanitizeFilename(filename)))
                 .build();
