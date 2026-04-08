@@ -55,26 +55,10 @@ public class StorageResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(summary = "Upload Generation SBOMs", description = "Uploads one or more files associated with a specific Generation ID.")
-    @RequestBody(
-            description = "The files to upload",
-            content = @Content(
-                    mediaType = MediaType.MULTIPART_FORM_DATA,
-                    schema = @Schema(implementation = MultipartUploadDTO.class)
-            )
-    )
-    @APIResponse(
-            responseCode = "200",
-            description = "Files uploaded successfully. Returns a map of Filename -> Permanent URL.",
-            content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    example = "{\"bom.json\": \"https://host/api/v1/storage/content/gen-123/bom.json\"}"
-            )
-    )
+    @RequestBody(description = "The files to upload", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA, schema = @Schema(implementation = MultipartUploadDTO.class)))
+    @APIResponse(responseCode = "200", description = "Files uploaded successfully. Returns a map of Filename -> Permanent URL.", content = @Content(mediaType = MediaType.APPLICATION_JSON, example = "{\"bom.json\": \"https://host/api/v1/storage/content/gen-123/bom.json\"}"))
     public Response uploadGeneration(
-            @Parameter(description = "The Generation ID", required = true)
-            @PathParam("generationId")
-            @NotBlank
-            String genId,
+            @Parameter(description = "The Generation ID", required = true) @PathParam("generationId") @NotBlank String genId,
             @RestForm("files") List<FileUpload> uploads) {
         return handleUpload(uploads, files -> storageService.storeGenerationSboms(genId, files));
     }
@@ -84,27 +68,11 @@ public class StorageResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(summary = "Upload Enhancement SBOMs", description = "Uploads one or more files associated with a specific Enhancement step.")
-    @RequestBody(
-            description = "The files to upload",
-            content = @Content(
-                    mediaType = MediaType.MULTIPART_FORM_DATA,
-                    schema = @Schema(implementation = MultipartUploadDTO.class)
-            )
-    )
-    @APIResponse(
-            responseCode = "200",
-            description = "Files uploaded successfully. Returns a map of Filename -> Permanent URL.",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON)
-    )
+    @RequestBody(description = "The files to upload", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA, schema = @Schema(implementation = MultipartUploadDTO.class)))
+    @APIResponse(responseCode = "200", description = "Files uploaded successfully. Returns a map of Filename -> Permanent URL.", content = @Content(mediaType = MediaType.APPLICATION_JSON))
     public Response uploadEnhancement(
-            @Parameter(description = "The Generation ID", required = true)
-            @PathParam("generationId")
-            @NotBlank
-            String genId,
-            @Parameter(description = "The Enhancement ID", required = true)
-            @PathParam("enhancementId")
-            @NotBlank
-            String enhId,
+            @Parameter(description = "The Generation ID", required = true) @PathParam("generationId") @NotBlank String genId,
+            @Parameter(description = "The Enhancement ID", required = true) @PathParam("enhancementId") @NotBlank String enhId,
             @RestForm("files") List<FileUpload> uploads) {
         return handleUpload(uploads, files -> storageService.storeEnhancementSboms(genId, enhId, files));
     }
@@ -121,25 +89,18 @@ public class StorageResource {
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Operation(summary = "Download File", description = "Streams the content of a stored file based on its storage key path.")
     public Response download(
-            @Parameter(description = "The storage path", required = true)
-            @PathParam("path")
-            @NotBlank
-            String path) {
-        
-        // Defense-in-depth: validate at API boundary
+            @Parameter(description = "The storage path", required = true) @PathParam("path") @NotBlank String path) {
+
         validateStoragePath(path);
-        
+
         String filename = extractSafeFilename(path);
-        
-        // Use StreamingOutput to properly manage InputStream lifecycle
-        // The stream is opened lazily when JAX-RS starts writing the response
-        // and automatically closed when done
+
         StreamingOutput streamingOutput = output -> {
             try (InputStream stream = storageService.getFileContent(path)) {
                 stream.transferTo(output);
             }
         };
-        
+
         return Response.ok(streamingOutput)
                 .header("Content-Disposition",
                         String.format("attachment; filename=\"%s\"", sanitizeFilename(filename)))
@@ -153,7 +114,7 @@ public class StorageResource {
 
     private Response handleUpload(List<FileUpload> uploads, UploadAction action) {
         validateUploads(uploads);
-        
+
         List<SbomFile> domainFiles = uploads.stream()
                 .peek(this::validateFileUpload)
                 .map(upload -> SbomFile.builder()
@@ -163,7 +124,7 @@ public class StorageResource {
                         .filePath(upload.uploadedFile())
                         .build())
                 .collect(Collectors.toList());
-        
+
         Map<String, String> result = action.execute(domainFiles);
         return Response.ok(result).build();
     }
@@ -196,13 +157,14 @@ public class StorageResource {
      * Validates storage path to prevent path traversal attacks.
      *
      * @param path the storage path to validate
-     * @throws WebApplicationException if path is invalid or contains malicious patterns
+     * @throws WebApplicationException if path is invalid or contains malicious
+     *                                 patterns
      */
     private void validateStoragePath(String path) {
         if (path == null || path.trim().isEmpty()) {
             throw new WebApplicationException("Path cannot be empty", Response.Status.BAD_REQUEST);
         }
-        
+
         // Prevent path traversal attacks
         if (path.contains("..") || path.startsWith("/") || path.contains("\\")) {
             log.warn("Path traversal attempt detected: {}", path);
@@ -210,7 +172,7 @@ public class StorageResource {
                     "Invalid path: path traversal not allowed",
                     Response.Status.BAD_REQUEST);
         }
-        
+
         // Validate expected pattern: gen-xxx/file.json or gen-xxx/enh-yyy/file.json
         // Allows alphanumeric, hyphens, underscores in directory names
         // Allows alphanumeric, dots, hyphens, underscores in filenames
@@ -236,17 +198,13 @@ public class StorageResource {
 
     /**
      * Sanitizes filename to prevent HTTP header injection attacks.
-     * Removes characters that could break header format or inject malicious content.
+     * Removes characters that could break header format or inject malicious
+     * content.
      *
      * @param filename the filename to sanitize
      * @return sanitized filename safe for use in HTTP headers
      */
     private String sanitizeFilename(String filename) {
-        // Prevent header injection and ensure safe filename
-        // Allow only alphanumeric characters, dots, hyphens, and underscores
-        // Replace any other characters with underscore
         return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 }
-
-

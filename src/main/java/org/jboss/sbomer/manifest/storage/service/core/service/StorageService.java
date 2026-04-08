@@ -75,11 +75,20 @@ public class StorageService implements StorageAdministration {
     }
 
     /**
-     * Uploads a batch of files atomically. If any file fails, the entire batch fails.
+     * Uploads a batch of files with fail-fast behavior.
+     *
+     * If any file fails during upload, the operation stops immediately and throws an exception.
+     * However, files that were successfully uploaded before the failure remain in storage
+     * (no automatic rollback is performed).
+     *
      * Properly manages InputStream resources using try-with-resources pattern.
-     * 
      * Each file's InputStream is opened, used, and closed within the same iteration
      * to ensure proper resource management.
+     *
+     * @param folderPrefix the storage folder prefix (e.g., "gen-123" or "gen-123/enh-456")
+     * @param files list of files to upload
+     * @return map of filename to permanent download URL for successfully uploaded files
+     * @throws RuntimeException if any file fails to open or upload
      */
     private Map<String, String> uploadBatch(String folderPrefix, List<SbomFile> files) {
         Map<String, String> resultUrls = new HashMap<>();
