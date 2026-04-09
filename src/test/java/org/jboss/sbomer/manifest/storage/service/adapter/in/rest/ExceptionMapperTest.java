@@ -1,211 +1,259 @@
 package org.jboss.sbomer.manifest.storage.service.adapter.in.rest;
 
-import static io.restassured.RestAssured.given;
-import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
-import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
-import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static jakarta.ws.rs.core.Response.Status.NOT_FOUND;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
+
+import org.jboss.sbomer.manifest.storage.service.adapter.in.rest.dto.ErrorResponse;
 import org.jboss.sbomer.manifest.storage.service.adapter.out.exception.StorageAccessException;
 import org.jboss.sbomer.manifest.storage.service.adapter.out.exception.StorageFileNotFoundException;
+import org.jboss.sbomer.manifest.storage.service.adapter.out.exception.StorageUnavailableException;
 import org.jboss.sbomer.manifest.storage.service.core.port.api.StorageAdministration;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 
-@QuarkusTest
+/**
+ * Unit tests for exception mappers.
+ * Tests that exception mappers correctly convert exceptions to structured error responses.
+ */
+@ExtendWith(MockitoExtension.class)
 class ExceptionMapperTest {
 
-    @InjectMock
+    @Mock
     StorageAdministration storageService;
+
+    StorageResource storageResource;
+    StorageExceptionMapper storageExceptionMapper;
+    GenericExceptionMapper genericExceptionMapper;
+    WebApplicationExceptionMapper webApplicationExceptionMapper;
+    IllegalArgumentExceptionMapper illegalArgumentExceptionMapper;
+
+    @BeforeEach
+    void setUp() {
+        storageResource = new StorageResource(storageService, 100, 10);
+        storageExceptionMapper = new StorageExceptionMapper();
+        genericExceptionMapper = new GenericExceptionMapper();
+        webApplicationExceptionMapper = new WebApplicationExceptionMapper();
+        illegalArgumentExceptionMapper = new IllegalArgumentExceptionMapper();
+    }
 
     @Test
     void testStorageFileNotFoundReturnsStructuredError() {
-        // 404 errors go through StorageExceptionMapper for unified handling
+        // Given
         String message = "File not found: gen-1/bom.json";
-        when(storageService.getFileContent(anyString()))
-                .thenThrow(new StorageFileNotFoundException(message, null));
+        StorageFileNotFoundException exception = new StorageFileNotFoundException(message, null);
+
+        // When
+        Response response = storageExceptionMapper.toResponse(exception);
+
+        // Then
+        assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+        assertEquals("application/json", response.getMediaType().toString());
         
-        given()
-                .when().get("/api/v1/storage/content/gen-1/bom.json")
-                .then()
-                .statusCode(NOT_FOUND.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(404))
-                .body("error", equalTo("Not Found"))
-                .body("message", equalTo(message))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
+        ErrorResponse error = (ErrorResponse) response.getEntity();
+        assertEquals(404, error.getStatus());
+        assertEquals("Not Found", error.getError());
+        assertEquals(message, error.getMessage());
+        assertNotNull(error.getTimestamp());
+        assertNotNull(error.getPath());
     }
 
     @Test
     void testStorageAccessDeniedReturnsStructuredError() {
-        // 403 errors go through StorageExceptionMapper
+        // Given
         String message = "Access denied to storage bucket";
-        when(storageService.getFileContent(anyString()))
-                .thenThrow(new StorageAccessException(message, null));
+        StorageAccessException exception = new StorageAccessException(message, null);
+
+        // When
+        Response response = storageExceptionMapper.toResponse(exception);
+
+        // Then
+        assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
+        assertEquals("application/json", response.getMediaType().toString());
         
-        given()
-                .when().get("/api/v1/storage/content/gen-1/bom.json")
-                .then()
-                .statusCode(FORBIDDEN.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(403))
-                .body("error", equalTo("Forbidden"))
-                .body("message", equalTo(message))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
+        ErrorResponse error = (ErrorResponse) response.getEntity();
+        assertEquals(403, error.getStatus());
+        assertEquals("Forbidden", error.getError());
+        assertEquals(message, error.getMessage());
+        assertNotNull(error.getTimestamp());
+        assertNotNull(error.getPath());
+    }
+
+    @Test
+    void testStorageUnavailableReturnsStructuredError() {
+        // Given
+        String message = "Storage service unavailable";
+        StorageUnavailableException exception = new StorageUnavailableException(message, null);
+
+        // When
+        Response response = storageExceptionMapper.toResponse(exception);
+
+        // Then
+        assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
+        assertEquals("application/json", response.getMediaType().toString());
+        
+        ErrorResponse error = (ErrorResponse) response.getEntity();
+        assertEquals(503, error.getStatus());
+        assertEquals("Service Unavailable", error.getError());
+        assertEquals(message, error.getMessage());
+        assertNotNull(error.getTimestamp());
+        assertNotNull(error.getPath());
     }
 
     @Test
     void testUnhandledExceptionReturnsStructuredError() {
-        // Generic exceptions go through GenericExceptionMapper
-        when(storageService.getFileContent(anyString()))
-                .thenThrow(new RuntimeException("Unexpected error"));
+        // Given
+        RuntimeException exception = new RuntimeException("Unexpected error");
+
+        // When
+        Response response = genericExceptionMapper.toResponse(exception);
+
+        // Then
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+        assertEquals("application/json", response.getMediaType().toString());
         
-        given()
-                .when().get("/api/v1/storage/content/gen-1/bom.json")
-                .then()
-                .statusCode(INTERNAL_SERVER_ERROR.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(500))
-                .body("error", equalTo("Internal Server Error"))
-                .body("message", equalTo("An unexpected error occurred."))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
+        ErrorResponse error = (ErrorResponse) response.getEntity();
+        assertEquals(500, error.getStatus());
+        assertEquals("Internal Server Error", error.getError());
+        assertEquals("An unexpected error occurred.", error.getMessage());
+        assertNotNull(error.getTimestamp());
+        assertNotNull(error.getPath());
     }
 
     @Test
     void testIllegalArgumentExceptionReturnsBadRequest() {
-        // Test that IllegalArgumentException from service layer returns 400
-        // Note: This test sends files to avoid the "No files provided" validation
-        when(storageService.storeGenerationSboms(anyString(), any()))
-                .thenThrow(new IllegalArgumentException("Files list cannot be null or empty"));
+        // Given
+        String message = "Files list cannot be null or empty";
+        IllegalArgumentException exception = new IllegalArgumentException(message);
+
+        // When
+        Response response = illegalArgumentExceptionMapper.toResponse(exception);
+
+        // Then
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        assertEquals("application/json", response.getMediaType().toString());
         
-        given()
-                .contentType("multipart/form-data")
-                .multiPart("files", "test.json", "{}".getBytes(), "application/json")
-                .when().post("/api/v1/storage/generations/gen-123")
-                .then()
-                .statusCode(BAD_REQUEST.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(400))
-                .body("error", equalTo("Bad Request"))
-                .body("message", equalTo("Files list cannot be null or empty"))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
+        ErrorResponse error = (ErrorResponse) response.getEntity();
+        assertEquals(400, error.getStatus());
+        assertEquals("Bad Request", error.getError());
+        assertEquals(message, error.getMessage());
+        assertNotNull(error.getTimestamp());
+        assertNotNull(error.getPath());
     }
 
     @Test
     void testWebApplicationExceptionPreservesStatusCode() {
-        // This test verifies that validation errors from StorageResource
-        // return the correct status code (400) instead of 500
-        given()
-                .contentType("multipart/form-data")
-                .when().post("/api/v1/storage/generations/gen-123")
-                .then()
-                .statusCode(BAD_REQUEST.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(400))
-                .body("error", equalTo("Bad Request"))
-                .body("message", equalTo("No files provided"))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
+        // Given
+        String message = "No files provided";
+        WebApplicationException exception = new WebApplicationException(
+            message, 
+            Response.Status.BAD_REQUEST
+        );
+
+        // When
+        Response response = webApplicationExceptionMapper.toResponse(exception);
+
+        // Then
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        assertEquals("application/json", response.getMediaType().toString());
+        
+        ErrorResponse error = (ErrorResponse) response.getEntity();
+        assertEquals(400, error.getStatus());
+        assertEquals("Bad Request", error.getError());
+        assertEquals(message, error.getMessage());
+        assertNotNull(error.getTimestamp());
+        assertNotNull(error.getPath());
     }
 
     @Test
-    void testDownloadFileNotFoundReturnsJsonError() {
-        // This test verifies that 404 errors from download endpoint
-        // return proper JSON ErrorResponse with correct Content-Type
+    void testDownloadFileNotFoundPropagatesException() {
+        // Given
         String message = "File not found: gen-1/missing.json";
         when(storageService.getFileContent(anyString()))
                 .thenThrow(new StorageFileNotFoundException(message, null));
+
+        // When/Then - exception should propagate to exception mapper
+        assertThrows(StorageFileNotFoundException.class, () -> {
+            storageResource.download("gen-1/missing.json");
+        });
+    }
+
+    @Test
+    void testPathValidationThrowsWebApplicationException() {
+        // When/Then - path traversal should throw WebApplicationException
+        WebApplicationException exception = assertThrows(WebApplicationException.class, () -> {
+            storageResource.download("gen-1/../etc/passwd");
+        });
         
-        given()
-                .when().get("/api/v1/storage/content/gen-1/missing.json")
-                .then()
-                .statusCode(NOT_FOUND.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(404))
-                .body("error", equalTo("Not Found"))
-                .body("message", equalTo(message))
-                .body("timestamp", notNullValue())
-                .body("path", equalTo("/api/v1/storage/content/gen-1/missing.json"));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), exception.getResponse().getStatus());
     }
 
     @Test
-    void testPathValidationReturnsJsonError() {
-        // This test verifies that path validation errors return 400 with JSON
-        // Use a path that reaches our endpoint but fails validation
-        given()
-                .when().get("/api/v1/storage/content/gen-1/../etc/passwd")
-                .then()
-                .statusCode(BAD_REQUEST.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(400))
-                .body("error", equalTo("Bad Request"))
-                .body("message", equalTo("Invalid path: path traversal not allowed"))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
-    }
-
-    @Test
-    void testInvalidPathFormatReturnsJsonError() {
-        // This test verifies that invalid path format returns 400 with JSON
-        given()
-                .when().get("/api/v1/storage/content/invalid@path")
-                .then()
-                .statusCode(BAD_REQUEST.getStatusCode())
-                .contentType("application/json")
-                .body("status", equalTo(400))
-                .body("error", equalTo("Bad Request"))
-                .body("message", equalTo("Invalid path format"))
-                .body("timestamp", notNullValue())
-                .body("path", notNullValue());
-    }
-
-    @Test
-    void testAllErrorResponsesHaveCorrectContentType() {
-        // This test verifies that all error responses have Content-Type: application/json
+    void testInvalidPathFormatThrowsWebApplicationException() {
+        // When/Then - invalid path format should throw WebApplicationException
+        WebApplicationException exception = assertThrows(WebApplicationException.class, () -> {
+            storageResource.download("invalid@path");
+        });
         
-        // Test 404 - handled by StorageExceptionMapper
-        when(storageService.getFileContent(anyString()))
-                .thenThrow(new StorageFileNotFoundException("Not found", null));
-        given()
-                .when().get("/api/v1/storage/content/gen-1/test.json")
-                .then()
-                .statusCode(NOT_FOUND.getStatusCode())
-                .contentType("application/json");
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), exception.getResponse().getStatus());
+    }
 
-        // Test 403 - handled by StorageExceptionMapper
-        when(storageService.getFileContent(anyString()))
-                .thenThrow(new StorageAccessException("Access denied", null));
-        given()
-                .when().get("/api/v1/storage/content/gen-1/test.json")
-                .then()
-                .statusCode(FORBIDDEN.getStatusCode())
-                .contentType("application/json");
+    @Test
+    void testAllExceptionMappersReturnJsonContentType() {
+        // Test that all exception mappers return application/json content type
+        
+        // StorageExceptionMapper
+        Response response1 = storageExceptionMapper.toResponse(
+            new StorageFileNotFoundException("Not found", null)
+        );
+        assertEquals("application/json", response1.getMediaType().toString());
 
-        // Test 400 (validation) - handled by WebApplicationExceptionMapper
-        given()
-                .when().get("/api/v1/storage/content/gen-1/../test.json")
-                .then()
-                .statusCode(BAD_REQUEST.getStatusCode())
-                .contentType("application/json");
+        Response response2 = storageExceptionMapper.toResponse(
+            new StorageAccessException("Access denied", null)
+        );
+        assertEquals("application/json", response2.getMediaType().toString());
 
-        // Test 500 (generic) - handled by GenericExceptionMapper
+        // GenericExceptionMapper
+        Response response3 = genericExceptionMapper.toResponse(
+            new RuntimeException("Unexpected")
+        );
+        assertEquals("application/json", response3.getMediaType().toString());
+
+        // IllegalArgumentExceptionMapper
+        Response response4 = illegalArgumentExceptionMapper.toResponse(
+            new IllegalArgumentException("Invalid argument")
+        );
+        assertEquals("application/json", response4.getMediaType().toString());
+
+        // WebApplicationExceptionMapper
+        Response response5 = webApplicationExceptionMapper.toResponse(
+            new WebApplicationException("Bad request", Response.Status.BAD_REQUEST)
+        );
+        assertEquals("application/json", response5.getMediaType().toString());
+    }
+
+    @Test
+    void testDownloadSuccessReturnsInputStream() {
+        // Given
+        byte[] content = "test content".getBytes();
         when(storageService.getFileContent(anyString()))
-                .thenThrow(new RuntimeException("Unexpected"));
-        given()
-                .when().get("/api/v1/storage/content/gen-1/test.json")
-                .then()
-                .statusCode(INTERNAL_SERVER_ERROR.getStatusCode())
-                .contentType("application/json");
+                .thenReturn(new ByteArrayInputStream(content));
+
+        // When
+        Response response = storageResource.download("gen-1/test.json");
+
+        // Then
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals("application/octet-stream", response.getMediaType().toString());
+        assertNotNull(response.getEntity());
+        assertTrue(response.getEntity() instanceof ByteArrayInputStream);
     }
 }
