@@ -25,7 +25,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.StreamingOutput;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -89,9 +88,10 @@ public class StorageResource {
     /**
      * Downloads a file from storage.
      *
-     * Uses StreamingOutput to ensure proper InputStream lifecycle management.
-     * The InputStream is opened when streaming starts and automatically closed
-     * when streaming completes or fails.
+     * Opens the InputStream before creating the Response to enable fail-fast error handling.
+     * Exceptions propagate to exception mappers for unified error handling.
+     * JAX-RS automatically manages the InputStream lifecycle, closing it after the response
+     * is fully streamed to the client.
      */
     @GET
     @Path("/content/{path: .*}")
@@ -107,18 +107,13 @@ public class StorageResource {
 
         validateStoragePath(path);
 
-        String filename = extractSafeFilename(path);
+        InputStream stream = storageService.getFileContent(path);
 
-        StreamingOutput streamingOutput = output -> {
-            try (InputStream stream = storageService.getFileContent(path)) {
-                stream.transferTo(output);
-            }
-        };
+        String filename = path.substring(path.lastIndexOf('/') + 1);
 
-        return Response.ok(streamingOutput)
+        return Response.ok(stream)
                 .type(MediaType.APPLICATION_OCTET_STREAM)
-                .header("Content-Disposition",
-                        String.format("attachment; filename=\"%s\"", sanitizeFilename(filename)))
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .build();
     }
 
@@ -199,27 +194,4 @@ public class StorageResource {
         }
     }
 
-    /**
-     * Extracts filename from path and removes any path separators.
-     *
-     * @param path the storage path
-     * @return safe filename without path separators
-     */
-    private String extractSafeFilename(String path) {
-        String filename = path.substring(path.lastIndexOf('/') + 1);
-        // Remove any remaining path separators
-        return filename.replaceAll("[/\\\\]", "");
-    }
-
-    /**
-     * Sanitizes filename to prevent HTTP header injection attacks.
-     * Removes characters that could break header format or inject malicious
-     * content.
-     *
-     * @param filename the filename to sanitize
-     * @return sanitized filename safe for use in HTTP headers
-     */
-    private String sanitizeFilename(String filename) {
-        return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
 }

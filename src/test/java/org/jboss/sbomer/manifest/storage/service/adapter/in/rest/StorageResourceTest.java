@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.jboss.resteasy.reactive.multipart.FileUpload;
+import org.jboss.sbomer.manifest.storage.service.adapter.out.exception.StorageFileNotFoundException;
 import org.jboss.sbomer.manifest.storage.service.core.domain.model.SbomFile;
 import org.jboss.sbomer.manifest.storage.service.core.port.api.StorageAdministration;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +29,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.StreamingOutput;
 
 @ExtendWith(MockitoExtension.class)
 class StorageResourceTest {
@@ -231,15 +233,79 @@ class StorageResourceTest {
     void testDownload_Success() {
         // Given
         String path = "gen-123/bom.json";
+        InputStream mockStream = new ByteArrayInputStream("test content".getBytes());
+        when(storageService.getFileContent(path)).thenReturn(mockStream);
 
         // When
         Response response = storageResource.download(path);
 
         // Then
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        assertTrue(response.getEntity() instanceof StreamingOutput);
+        assertTrue(response.getEntity() instanceof InputStream);
         assertTrue(response.getHeaderString("Content-Disposition").contains("attachment"));
         assertTrue(response.getHeaderString("Content-Disposition").contains("bom.json"));
+        verify(storageService).getFileContent(path);
+    }
+
+    @Test
+    void testDownload_FileNotFound() {
+        // Given
+        String path = "gen-123/missing.json";
+        when(storageService.getFileContent(path))
+                .thenThrow(new StorageFileNotFoundException("File not found: " + path, null));
+
+        // When & Then - Exception propagates to StorageExceptionMapper
+        StorageFileNotFoundException exception = assertThrows(
+                StorageFileNotFoundException.class,
+                () -> storageResource.download(path)
+        );
+        assertEquals("File not found: " + path, exception.getMessage());
+        verify(storageService).getFileContent(path);
+    }
+
+    @Test
+    void testDownload_InternalError() {
+        // Given
+        String path = "gen-123/error.json";
+        when(storageService.getFileContent(path))
+                .thenThrow(new RuntimeException("Unexpected error"));
+
+        // When & Then - Exception propagates to GenericExceptionMapper
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> storageResource.download(path)
+        );
+        assertEquals("Unexpected error", exception.getMessage());
+        verify(storageService).getFileContent(path);
+    }
+
+    @Test
+    void testDownload_InvalidPath_PathTraversal() {
+        // Given
+        String path = "../etc/passwd";
+
+        // When & Then
+        WebApplicationException exception = assertThrows(
+                WebApplicationException.class,
+                () -> storageResource.download(path)
+        );
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), exception.getResponse().getStatus());
+        assertTrue(exception.getMessage().contains("path traversal"));
+        verify(storageService, never()).getFileContent(anyString());
+    }
+
+    @Test
+    void testDownload_InvalidPath_InvalidFormat() {
+        // Given
+        String path = "gen-123/../../file.json";
+
+        // When & Then
+        WebApplicationException exception = assertThrows(
+                WebApplicationException.class,
+                () -> storageResource.download(path)
+        );
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), exception.getResponse().getStatus());
+        verify(storageService, never()).getFileContent(anyString());
     }
 
 
